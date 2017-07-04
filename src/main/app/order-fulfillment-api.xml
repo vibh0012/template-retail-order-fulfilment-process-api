@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" 
+	xmlns:json="http://www.mulesoft.org/schema/mule/json" 
+	xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" 
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" 
+	xmlns="http://www.mulesoft.org/schema/mule/core" 
+	xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit" 
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" 
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.1.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+    
+    <flow name="order-fulfillment-api-main">
+        <http:listener config-ref="order-fulfillment-api-httpListenerConfig" path="/api/*" doc:name="HTTP"/>
+        <apikit:router config-ref="order-fulfillment-api-config" doc:name="APIkit Router"/>
+        <exception-strategy ref="order-fulfillment-api-apiKitGlobalExceptionMapping" doc:name="Reference Exception Strategy"/>
+    </flow>
+    <flow name="order-fulfillment-api-console">
+        <http:listener config-ref="order-fulfillment-api-httpListenerConfig" path="/console/*" doc:name="HTTP"/>
+        <apikit:console config-ref="order-fulfillment-api-config" doc:name="APIkit Console"/>
+    </flow>
+    <flow name="post:/orders:order-fulfillment-api-config">
+        <dw:transform-message doc:name="save to var inputOrder">
+            <dw:set-variable variableName="inputOrder"><![CDATA[%dw 1.0
+%output application/java
+---
+payload]]></dw:set-variable>
+        </dw:transform-message>
+        <logger level="INFO" doc:name="Check availability (for each item)"/>
+        <logger level="INFO" doc:name="Reserve item"/>
+        <enricher source="#[payload]" target="#[flowVars.order]" doc:name="var order">
+            <processor-chain doc:name="Processor Chain">
+                <dw:transform-message doc:name="map input to Order API">
+                    <dw:input-payload doc:sample="sample_data/json.json"/>
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	orderItems: flowVars.inputOrder.orderItems map ((orderItem) -> {
+		orderItemId: orderItem.itemId,
+		productName: orderItem.name,
+		quantity: orderItem.quantity
+	}),
+	price: flowVars.inputOrder.price,
+	status: "Draft"
+}]]></dw:set-payload>
+                </dw:transform-message>
+                <http:request config-ref="orders-api" path="/orders/customer/{customerId}" method="POST" doc:name="Create Order">
+                    <http:request-builder>
+                        <http:uri-param paramName="customerId" value="#[ flowVars.inputOrder.customerId ]"/>
+                        <http:header headerName="Content-Type" value="application/json"/>
+                    </http:request-builder>
+                </http:request>
+                <json:json-to-object-transformer doc:name="JSON to Object" returnClass="java.util.Map" mimeType="application/java"/>
+            </processor-chain>
+        </enricher>
+        <choice doc:name="Successfully created?">
+            <when expression="#[flowVars.order != null]">
+                <logger level="INFO" doc:name="Payment"/>
+                <dw:transform-message doc:name="Update status to Processing">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	status: "Processing"
+}]]></dw:set-payload>
+                </dw:transform-message>
+                <http:request config-ref="orders-api" path="/orders/{id}/status" method="PUT" doc:name="Update order status">
+                    <http:request-builder>
+                        <http:uri-param paramName="id" value="#[flowVars.order.id]"/>
+                    </http:request-builder>
+                </http:request>
+                <logger level="INFO" doc:name="Update status (paid)"/>
+                <async doc:name="Async">
+                    <logger level="INFO" doc:name="Send Notification to user (email)"/>
+                    <http:request config-ref="customers-api" path="/customers/{customerId}" method="GET" doc:name="Get Customer info">
+                        <http:request-builder>
+                            <http:uri-param paramName="customerId" value="#[flowVars.inputOrder.customerId]"/>
+                        </http:request-builder>
+                    </http:request>
+                    <dw:transform-message doc:name="build notification e-mail">
+                    	<dw:input-variable mimeType="application/java" variableName="order]"/>
+                        <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+    type: "EMAIL",
+    priority: "MINOR",
+    recipient: payload.emailAddress,
+    subject: "Order $(flowVars.order.id) | Anypoint Store",
+    message: "Hello,
+
+Your order $(flowVars.order.id) has been placed.
+We will inform you about future updates.
+
+Thanks,
+MuleSoft Team"
+        
+}]]></dw:set-payload>
+                    </dw:transform-message>
+                    <logger message="#[message.payloadAs(java.lang.String)]" level="INFO" doc:name="Logger"/>
+                    <http:request config-ref="notifications-api" path="/notifications" method="POST" doc:name="Send e-mail notification">
+                        <http:request-builder>
+                            <http:header headerName="Content-Type" value="application/json"/>
+                        </http:request-builder>
+                    </http:request>
+                </async>
+                <logger level="INFO" doc:name="Logger" message="Order: #[flowVars.order.getClass()]"/>
+                <dw:transform-message doc:name="build response">
+                	<dw:input-variable mimeType="application/java" variableName="order]"/>
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	"status": "created",
+	"orderId": flowVars.order.id
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </when>
+            <otherwise>
+                <dw:transform-message doc:name="Failure">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+{
+	id: null,
+	status: "failed",
+	message: "Order creation failed"
+}]]></dw:set-payload>
+                </dw:transform-message>
+            </otherwise>
+        </choice>
+    </flow>
+    <apikit:mapping-exception-strategy name="order-fulfillment-api-apiKitGlobalExceptionMapping">
+        <apikit:mapping statusCode="404">
+            <apikit:exception value="org.mule.module.apikit.exception.NotFoundException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Resource not found&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="405">
+            <apikit:exception value="org.mule.module.apikit.exception.MethodNotAllowedException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Method not allowed&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="415">
+            <apikit:exception value="org.mule.module.apikit.exception.UnsupportedMediaTypeException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Unsupported media type&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="406">
+            <apikit:exception value="org.mule.module.apikit.exception.NotAcceptableException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Not acceptable&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+        <apikit:mapping statusCode="400">
+            <apikit:exception value="org.mule.module.apikit.exception.BadRequestException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>
+            <set-payload value="{ &quot;message&quot;: &quot;Bad request&quot; }" doc:name="Set Payload"/>
+        </apikit:mapping>
+    </apikit:mapping-exception-strategy>
+</mule>

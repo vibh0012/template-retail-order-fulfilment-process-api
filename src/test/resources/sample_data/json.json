@@ -1,0 +1,18 @@
+{
+  "customerId": "google-oauth2_115848269770231539612",
+  "orderItems": [
+    {
+      "itemId": "88668866-2c6d-4fa6-9e17-4b2c42e0f051",
+      "quantity": 1,
+      "price": "34.9USD",
+      "name": ""
+    },
+    {
+      "itemId": "355d4130-1e3a-4795-aada-c960c89f6d9f",
+      "quantity": 1,
+      "price": "47.95USD",
+      "name": ""
+    }
+  ],
+  "price": "82.85 USD"
+}
