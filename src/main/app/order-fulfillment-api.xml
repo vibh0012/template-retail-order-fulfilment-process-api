@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" 
+<mule xmlns:validation="http://www.mulesoft.org/schema/mule/validation" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" 
 	xmlns:json="http://www.mulesoft.org/schema/mule/json" 
 	xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" 
 	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" 
@@ -14,7 +14,9 @@ http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/a
 http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.1.xsd
 http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
 http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
-http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
+    
     
     <flow name="order-fulfillment-api-main">
         <http:listener config-ref="order-fulfillment-api-httpListenerConfig" path="/api/*" doc:name="HTTP"/>
@@ -32,86 +34,16 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 ---
 payload]]></dw:set-variable>
         </dw:transform-message>
-        <logger level="INFO" doc:name="Check availability (for each item)"/>
-        <logger level="INFO" doc:name="Reserve item"/>
-        <enricher source="#[payload]" target="#[flowVars.order]" doc:name="var order">
-            <processor-chain doc:name="Processor Chain">
-                <dw:transform-message doc:name="map input to Order API">
-                    <dw:input-payload doc:sample="sample_data/json.json"/>
-                    <dw:set-payload><![CDATA[%dw 1.0
-%output application/json
----
-{
-	orderItems: flowVars.inputOrder.orderItems map ((orderItem) -> {
-		orderItemId: orderItem.itemId,
-		productName: orderItem.name,
-		quantity: orderItem.quantity
-	}),
-	price: flowVars.inputOrder.price,
-	status: "Draft"
-}]]></dw:set-payload>
-                </dw:transform-message>
-                <http:request config-ref="orders-api" path="/orders/customer/{customerId}" method="POST" doc:name="Create Order">
-                    <http:request-builder>
-                        <http:uri-param paramName="customerId" value="#[ flowVars.inputOrder.customerId ]"/>
-                        <http:header headerName="Content-Type" value="application/json"/>
-                    </http:request-builder>
-                </http:request>
-                <json:json-to-object-transformer doc:name="JSON to Object" returnClass="java.util.Map" mimeType="application/java"/>
-            </processor-chain>
-        </enricher>
+        <flow-ref name="checkAvailability" doc:name="checkAvailability"/>
+        <flow-ref name="reserveOrderItems" doc:name="reserveOrderItems"/>
+        <flow-ref name="createOrder" doc:name="createOrder"/>
         <choice doc:name="Successfully created?">
             <when expression="#[flowVars.order != null]">
-                <logger level="INFO" doc:name="Payment"/>
-                <dw:transform-message doc:name="Update status to Processing">
-                    <dw:set-payload><![CDATA[%dw 1.0
-%output application/json
----
-{
-	status: "Processing"
-}]]></dw:set-payload>
-                </dw:transform-message>
-                <http:request config-ref="orders-api" path="/orders/{id}/status" method="PUT" doc:name="Update order status">
-                    <http:request-builder>
-                        <http:uri-param paramName="id" value="#[flowVars.order.id]"/>
-                    </http:request-builder>
-                </http:request>
-                <logger level="INFO" doc:name="Update status (paid)"/>
+                <flow-ref name="processPayment" doc:name="processPayment"/>
+                <flow-ref name="updateOrderStatus" doc:name="updateOrderStatus"/>
                 <async doc:name="Async">
-                    <logger level="INFO" doc:name="Send Notification to user (email)"/>
-                    <http:request config-ref="customers-api" path="/customers/{customerId}" method="GET" doc:name="Get Customer info">
-                        <http:request-builder>
-                            <http:uri-param paramName="customerId" value="#[flowVars.inputOrder.customerId]"/>
-                        </http:request-builder>
-                    </http:request>
-                    <dw:transform-message doc:name="build notification e-mail">
-                    	<dw:input-variable mimeType="application/java" variableName="order]"/>
-                        <dw:set-payload><![CDATA[%dw 1.0
-%output application/json
----
-{
-    type: "EMAIL",
-    priority: "MINOR",
-    recipient: payload.emailAddress,
-    subject: "Order $(flowVars.order.id) | Anypoint Store",
-    message: "Hello,
-
-Your order $(flowVars.order.id) has been placed.
-We will inform you about future updates.
-
-Thanks,
-MuleSoft Team"
-        
-}]]></dw:set-payload>
-                    </dw:transform-message>
-                    <logger message="#[message.payloadAs(java.lang.String)]" level="INFO" doc:name="Logger"/>
-                    <http:request config-ref="notifications-api" path="/notifications" method="POST" doc:name="Send e-mail notification">
-                        <http:request-builder>
-                            <http:header headerName="Content-Type" value="application/json"/>
-                        </http:request-builder>
-                    </http:request>
+                    <flow-ref name="sendNotificationEmail" doc:name="sendNotificationEmail"/>
                 </async>
-                <logger level="INFO" doc:name="Logger" message="Order: #[flowVars.order.getClass()]"/>
                 <dw:transform-message doc:name="build response">
                 	<dw:input-variable mimeType="application/java" variableName="order]"/>
                     <dw:set-payload><![CDATA[%dw 1.0
@@ -137,6 +69,168 @@ MuleSoft Team"
             </otherwise>
         </choice>
     </flow>
+    
+    
+    
+    <sub-flow name="checkAvailability">
+        <foreach collection="#[flowVars.inputOrder.orderItems]" doc:name="For Each OrderItem">
+            <set-variable variableName="currentItem" value="#[payload]" doc:name="var currentItem"/>
+            <logger message="#[payload.getClass()]" level="INFO" doc:name="Logger"/>
+            <http:request config-ref="product-availability-api" path="/availability" method="GET" doc:name="Check availability">
+                <http:request-builder>
+                    <http:query-param paramName="variantId" value="#[payload.itemId]"/>
+                </http:request-builder>
+            </http:request>
+            <dw:transform-message doc:name="check availability">
+                <dw:input-payload doc:sample="sample_data/json_1.json"/>
+                <dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+payload.warehousesAvailability filter $.availableAmount > 0
+reduce ($$.availableAmount + $.availableAmount) >= flowVars.currentItem.quantity
+
+]]></dw:set-payload>
+            </dw:transform-message>
+            <validation:is-true expression="#[payload]" doc:name="All items must be available"/>
+        </foreach>
+    </sub-flow>
+    
+    <sub-flow name="reserveOrderItems">
+        <foreach collection="#[flowVars.inputOrder.orderItems]" doc:name="For Each Order Item">
+            <dw:transform-message doc:name="reservation request">
+                <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+          "variantId": payload.itemId,
+          "warehouseReservation": {
+            id: "1",
+            reserveAmount: payload.quantity
+          },
+          "date": now as :date     
+        }]]></dw:set-payload>
+            </dw:transform-message>
+            <http:request config-ref="product-availability-api" path="/reservation" method="POST" doc:name="Reserve order item">
+                <http:request-builder>
+                    <http:header headerName="Content-Type" value="application/json"/>
+                </http:request-builder>
+            </http:request>
+        </foreach>
+    </sub-flow>
+    
+    <sub-flow name="createOrder">
+        <enricher source="#[payload]" target="#[flowVars.order]" doc:name="var order">
+            <processor-chain doc:name="Processor Chain">
+                <dw:transform-message doc:name="map input to Order API">
+                    <dw:input-payload />
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	orderItems: flowVars.inputOrder.orderItems map ((orderItem) -> {
+		orderItemId: orderItem.itemId,
+		productName: orderItem.name,
+		quantity: orderItem.quantity
+	}),
+	price: flowVars.inputOrder.price,
+	status: "Draft"
+}]]></dw:set-payload>
+                </dw:transform-message>
+                <http:request config-ref="orders-api" path="/orders/customer/{customerId}" method="POST" doc:name="Create Order">
+                    <http:request-builder>
+                        <http:uri-param paramName="customerId" value="#[ flowVars.inputOrder.customerId ]"/>
+                        <http:header headerName="Content-Type" value="application/json"/>
+                    </http:request-builder>
+                </http:request>
+                <json:json-to-object-transformer returnClass="java.util.Map" mimeType="application/java" doc:name="JSON to Object"/>
+            </processor-chain>
+        </enricher>
+    </sub-flow>
+    
+    <sub-flow name="processPayment">
+        <dw:transform-message doc:name="prepare payment request">
+        	<dw:input-variable mimeType="application/java" variableName="order"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+  "price": {
+    "amount": {
+      "currency": "USD",
+      "currencyValue": flowVars.inputOrder.price,
+      "name": "Amount"
+    },
+    "salesUnit": {
+      "code": "EA",
+      "name": "Each"
+    }
+  },
+  "customer": {
+    "paymentMethod": "BANK",
+    "orderId": flowVars.order.id,
+    "customerId": flowVars.inputOrder.customerId
+  }
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <http:request config-ref="payment-process-api" path="/processPayment" method="POST" doc:name="Payment">
+            <http:request-builder>
+                <http:header headerName="Content-Type" value="application/json"/>
+            </http:request-builder>
+        </http:request>
+    </sub-flow>
+    
+    <sub-flow name="updateOrderStatus">
+        <dw:transform-message doc:name="Update status to Processing">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+	status: "Processing"
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <http:request config-ref="orders-api" path="/orders/{id}/status" method="PUT" doc:name="Update order status">
+            <http:request-builder>
+                <http:uri-param paramName="id" value="#[flowVars.order.id]"/>
+            </http:request-builder>
+        </http:request>
+    </sub-flow>
+    
+    <sub-flow name="sendNotificationEmail">
+        <logger level="INFO" doc:name="Send Notification to user (email)"/>
+        <http:request config-ref="customers-api" path="/customers/{customerId}" method="GET" doc:name="Get Customer info">
+            <http:request-builder>
+                <http:uri-param paramName="customerId" value="#[flowVars.inputOrder.customerId]"/>
+            </http:request-builder>
+        </http:request>
+        <dw:transform-message doc:name="build notification e-mail">
+            <dw:input-variable mimeType="application/java" variableName="order]"/>
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+{
+    type: "EMAIL",
+    priority: "MINOR",
+    recipient: payload.emailAddress,
+    subject: "Order - $(flowVars.order.id) | Anypoint Store",
+    message: "Hello,
+
+Your order [ $(flowVars.order.id) ] has been placed.
+We will inform you about future updates.
+
+Thanks,
+MuleSoft Team"
+        
+}]]></dw:set-payload>
+        </dw:transform-message>
+        <http:request config-ref="notifications-api" path="/notifications" method="POST" doc:name="Send e-mail notification">
+            <http:request-builder>
+                <http:header headerName="Content-Type" value="application/json"/>
+            </http:request-builder>
+        </http:request>
+    </sub-flow>
+    
+    
+    
     <apikit:mapping-exception-strategy name="order-fulfillment-api-apiKitGlobalExceptionMapping">
         <apikit:mapping statusCode="404">
             <apikit:exception value="org.mule.module.apikit.exception.NotFoundException" />

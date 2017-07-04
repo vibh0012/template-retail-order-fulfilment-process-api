@@ -39,6 +39,20 @@ http://www.springframework.org/schema/context http://www.springframework.org/sch
         <http:raml-api-configuration location="retail-orders-system-api/retail-orders-system-api.raml"/>
     </http:request-config>
     
+    <http:request-config name="product-availability-api" doc:name="HTTP Request Configuration"
+	    host="#[new URL('${product-availability-api.baseUri}').getHost()]" 
+	    port="#[new URL('${product-availability-api.baseUri}').getPort()]" 
+	    basePath="#[new URL('${product-availability-api.baseUri}').getPath()]" protocol="HTTPS">
+        <http:raml-api-configuration location="retail-product-availability-api/retail-product-availability-api.raml"/>
+    </http:request-config>
+    
+    <http:request-config name="payment-process-api" doc:name="HTTP Request Configuration"
+	    host="#[new URL('${payment-process-api.baseUri}').getHost()]" 
+	    port="#[new URL('${payment-process-api.baseUri}').getPort()]" 
+	    basePath="#[new URL('${payment-process-api.baseUri}').getPath()]" protocol="HTTPS">
+        <http:raml-api-configuration location="retail-payment-process-api/payment-process-api.raml"/>
+    </http:request-config>
+    
     <context:property-placeholder location="common.properties,mule.${mule.env}.properties"/>
 
 </mule>

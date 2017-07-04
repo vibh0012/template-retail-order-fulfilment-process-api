@@ -1,0 +1,134 @@
+#%RAML 1.0
+baseUri: http://localhost:8081
+title: Product Availability Process API
+version: v1
+
+types: 
+
+  warehouseService: 
+    type: object
+    properties:
+      id: string 
+      availableAmount?:
+        type: number
+        minimum: 0
+      reserveAmount?: 
+        type: number
+        minimum: 0
+      status?: string
+       
+  variantAvailability:
+    type: object
+    properties:
+      variantId: string
+      totalAmount:
+        type: number
+        minimum: 0
+      status: string
+      date: date-only
+      warehousesAvailability: warehouseService[]
+      storesAvailability:  warehouseService[]
+        
+        
+  variantReservation: 
+   type: object
+   properties: 
+    variantId: string
+    storeReservation: warehouseService
+    warehouseReservation: warehouseService
+    
+  
+/availability:       
+  get:
+    queryParameters: 
+      variantId:
+        type: string
+    responses:
+      200: 
+        body: 
+          application/json: 
+            example: | 
+              {
+                "variantId": "88668866-2c6d-4fa6-9e17-4b2c42e0f051",
+                "totalAmount": 8,
+                "status": "in stock",
+                "date": "2017-06-17",
+                "warehousesAvailability": [
+                  {
+                    "id": "1",
+                    "availableAmount": 2,
+                    "status": "available"
+                  },
+                  {
+                    "id": "3",
+                    "availableAmount": 3,
+                    "status": "available"
+                  }
+                ],
+                "storesAvailability": [
+                  {
+                    "id": "123",
+                    "availableAmount": 1,
+                    "status": "available"
+                  },
+                  {
+                    "id": "234",
+                    "availableAmount": 1,
+                    "status": "available"
+                  },
+                  {
+                    "id": "475",
+                    "amount": 1,
+                    "status": "available"
+                  },
+                  {
+                    "storeId": "324",
+                    "amount": 0,
+                    "status": "unavailable"
+                  }
+                ]
+              }
+            
+/reservation: 
+  post:
+    body:
+      application/json: 
+        example: {
+          "variantId": "88668866-2c6d-4fa6-9e17-4b2c42e0f051",
+          "storeReservation": {
+            id: "475",
+            reserveAmount: 1 
+          },
+          "warehouseReservation": {
+            id: "1",
+            reserveAmount: 1 
+          },
+          "date": 2017-06-27        
+        }
+    responses:
+      201: 
+        body:
+          application/json:
+            example: {
+              "variantId": "88668866-2c6d-4fa6-9e17-4b2c42e0f051",
+              "storeReservation": {
+                  id: "475",
+                  reserveAmount: 1 
+               },
+               "warehouseReservation": {
+                  id: "1",
+                  reserveAmount: 1 
+               },
+               "date": 2017-06-27        
+            }
+              
+   
+
+
+        
+        
+
+   
+    
+   
+   

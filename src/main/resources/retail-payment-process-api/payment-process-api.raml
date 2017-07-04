@@ -1,0 +1,57 @@
+#%RAML 1.0
+title: Payment Process API
+baseUri: https://localhost:8082/api
+version: v1
+
+/paymentMethods:
+  get:
+    responses:
+      200:
+        body:
+          application/json:
+            example: |
+              {
+                "paymentMethods": [
+                        {
+                          "identifier":"deb89058-77fb-4e97-8c83-6506c38c4444",
+                          "paymentMethodType":{  
+                            "medium":"CARD",
+                            "issuer":"BANK",
+                            "name":"VISA"
+                          }
+                        }
+                      ]
+              }
+
+/processPayment:
+  post:
+    body:
+      application/json:
+        example: |
+          {
+            "price": {
+              "amount": {
+                "currency": "USD",
+                "currencyValue": 34.90,
+                "name": "Amount"
+              },
+              "salesUnit": {
+                "code": "EA",
+                "name": "Each"
+              }
+            },
+            "customer" : {
+              "paymentMethod": "BANK",
+              "orderId" : "2834987-a31313-909999",
+              "customerId" : "9238492-19238kjhskdja-918329"
+            }
+          }   
+    responses:
+      200:
+        body:
+          application/json:
+            example: |
+              {
+                "id" : "askd-123a-adl0-19999, 
+                "status" : "paid"
+              }
