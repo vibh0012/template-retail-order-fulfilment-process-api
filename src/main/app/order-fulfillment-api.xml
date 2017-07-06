@@ -82,7 +82,6 @@ payload]]></dw:set-variable>
                 </http:request-builder>
             </http:request>
             <dw:transform-message doc:name="check availability">
-                <dw:input-payload doc:sample="sample_data/json_1.json"/>
                 <dw:set-payload><![CDATA[%dw 1.0
 %output application/java
 ---
