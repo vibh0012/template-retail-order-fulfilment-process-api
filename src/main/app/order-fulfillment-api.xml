@@ -128,6 +128,7 @@ reduce ($$.availableAmount + $.availableAmount) >= flowVars.currentItem.quantity
 {
 	orderItems: flowVars.inputOrder.orderItems map ((orderItem) -> {
 		orderItemId: orderItem.itemId,
+		productId: orderItem.productId,
 		productName: orderItem.name,
 		quantity: orderItem.quantity
 	}),
