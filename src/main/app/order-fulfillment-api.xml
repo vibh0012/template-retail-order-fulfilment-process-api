@@ -51,7 +51,7 @@ payload]]></dw:set-variable>
 ---
 {
 	"status": "created",
-	"orderId": flowVars.order.id
+	"orderId": flowVars.order.orderId
 }]]></dw:set-payload>
                 </dw:transform-message>
             </when>
@@ -75,18 +75,22 @@ payload]]></dw:set-variable>
     <sub-flow name="checkAvailability">
         <foreach collection="#[flowVars.inputOrder.orderItems]" doc:name="For Each OrderItem">
             <set-variable variableName="currentItem" value="#[payload]" doc:name="var currentItem"/>
-            <logger message="#[payload.getClass()]" level="INFO" doc:name="Logger"/>
-            <http:request config-ref="product-availability-api" path="/availability" method="GET" doc:name="Check availability">
+
+            <http:request config-ref="product-availability-api" path="/locations/{locationId}/availability" method="GET" doc:name="Check availability">
                 <http:request-builder>
                     <http:query-param paramName="variantId" value="#[payload.itemId]"/>
+                    <http:query-param paramName="productId" value="#[payload.productId]"/>
+                    <http:query-param paramName="locationType" value="#[payload.location.locationType]"/>
+                    <http:uri-param paramName="locationId" value="#[payload.location.locationId]"/>
+
+
                 </http:request-builder>
             </http:request>
             <dw:transform-message doc:name="check availability">
                 <dw:set-payload><![CDATA[%dw 1.0
 %output application/java
 ---
-payload.warehousesAvailability filter $.availableAmount > 0
-reduce ($$.availableAmount + $.availableAmount) >= flowVars.currentItem.quantity
+payload.quantity >= flowVars.currentItem.quantity
 
 ]]></dw:set-payload>
             </dw:transform-message>
@@ -100,14 +104,15 @@ reduce ($$.availableAmount + $.availableAmount) >= flowVars.currentItem.quantity
                 <dw:set-payload><![CDATA[%dw 1.0
 %output application/json
 ---
-{
-          "variantId": payload.itemId,
-          "warehouseReservation": {
-            id: "1",
-            reserveAmount: payload.quantity
-          },
-          "date": now as :date     
-        }]]></dw:set-payload>
+{     
+  "variantId": payload.itemId,
+  "productId": payload.productId,
+  "locationId": payload.location.locationId, 
+  "deliveryMethod": payload.location.deliveryMethod,
+  "locationType": payload.location.locationType, 
+  "quantity": payload.quantity, 
+  "customerId": flowVars.inputOrder.customerId   
+}]]></dw:set-payload>
             </dw:transform-message>
             <http:request config-ref="product-availability-api" path="/reservation" method="POST" doc:name="Reserve order item">
                 <http:request-builder>
@@ -121,19 +126,42 @@ reduce ($$.availableAmount + $.availableAmount) >= flowVars.currentItem.quantity
         <enricher source="#[payload]" target="#[flowVars.order]" doc:name="var order">
             <processor-chain doc:name="Processor Chain">
                 <dw:transform-message doc:name="map input to Order API">
-                    <dw:input-payload />
+                    <dw:input-variable variableName="inputOrder"/>
                     <dw:set-payload><![CDATA[%dw 1.0
 %output application/json
 ---
 {
-	orderItems: flowVars.inputOrder.orderItems map ((orderItem) -> {
-		orderItemId: orderItem.itemId,
-		productId: orderItem.productId,
-		productName: orderItem.name,
-		quantity: orderItem.quantity
-	}),
+	orderItems: {
+	  pickupItems : (flowVars.inputOrder.orderItems filter $.location.locationType == "STORE") 
+	  	map (orderItem) -> {
+			orderItemId: orderItem.itemId,
+			locationId: orderItem.location.locationId,
+			deliveryMethod: orderItem.location.deliveryMethod,
+			productId: orderItem.productId,
+			productName: orderItem.name,
+			quantity: orderItem.quantity
+	  },
+	  shipmentItems : (flowVars.inputOrder.orderItems filter $.location.locationType == "WAREHOUSE") 
+	  	map (orderItem) -> {
+			orderItemId: orderItem.itemId,
+			locationId: orderItem.location.locationId,
+			deliveryMethod: orderItem.location.deliveryMethod,
+			productId: orderItem.productId,
+			productName: orderItem.name,
+			quantity: orderItem.quantity
+	  },
+	  partnerItems : (flowVars.inputOrder.orderItems filter $.location.locationType == "PARTNER") 
+	  	map (orderItem) -> {
+			orderItemId: orderItem.itemId,
+			locationId: orderItem.location.locationId,
+			deliveryMethod: orderItem.location.deliveryMethod,			
+			productId: orderItem.productId,
+			productName: orderItem.name,
+			quantity: orderItem.quantity
+	  },	  
 	price: flowVars.inputOrder.price,
 	status: "Draft"
+	}
 }]]></dw:set-payload>
                 </dw:transform-message>
                 <http:request config-ref="orders-api" path="/orders/customer/{customerId}" method="POST" doc:name="Create Order">
@@ -188,9 +216,11 @@ reduce ($$.availableAmount + $.availableAmount) >= flowVars.currentItem.quantity
 	status: "Processing"
 }]]></dw:set-payload>
         </dw:transform-message>
-        <http:request config-ref="orders-api" path="/orders/{id}/status" method="PUT" doc:name="Update order status">
+        <logger message="XXXXXXXXXXX #[message]" level="INFO" doc:name="Logger"/>
+        <http:request config-ref="orders-api" path="/orders/{orderId}/status" method="PUT" doc:name="Update order status">
             <http:request-builder>
-                <http:uri-param paramName="id" value="#[flowVars.order.id]"/>
+                <http:uri-param paramName="orderId" value="#[flowVars.order.orderId]"/>
+
             </http:request-builder>
         </http:request>
     </sub-flow>
@@ -211,10 +241,10 @@ reduce ($$.availableAmount + $.availableAmount) >= flowVars.currentItem.quantity
     type: "EMAIL",
     priority: "MINOR",
     recipient: payload.emailAddress,
-    subject: "Order - $(flowVars.order.id) | Anypoint Store",
+    subject: "Order - $(flowVars.order.orderId) | Anypoint Store",
     message: "Hello,
 
-Your order [ $(flowVars.order.id) ] has been placed.
+Your order [ $(flowVars.order.orderId) ] has been placed.
 We will inform you about future updates.
 
 Thanks,

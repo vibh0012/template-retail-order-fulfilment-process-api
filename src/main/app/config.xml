@@ -42,8 +42,9 @@ http://www.springframework.org/schema/context http://www.springframework.org/sch
     <http:request-config name="product-availability-api" doc:name="HTTP Request Configuration"
 	    host="#[new URL('${product-availability-api.baseUri}').getHost()]" 
 	    port="#[new URL('${product-availability-api.baseUri}').getPort()]" 
-	    basePath="#[new URL('${product-availability-api.baseUri}').getPath()]" protocol="HTTPS">
+	    basePath="#[new URL('${product-availability-api.baseUri}').getPath()]" >
         <http:raml-api-configuration location="retail-product-availability-api/retail-product-availability-api.raml"/>
+
     </http:request-config>
     
     <http:request-config name="payment-process-api" doc:name="HTTP Request Configuration"

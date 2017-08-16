@@ -1,134 +1,166 @@
 #%RAML 1.0
-baseUri: http://localhost:8081
 title: Product Availability Process API
-version: v1
+version: dev
+baseUri: http://localhost:8082
+
+traits: 
+  geoSearch: !include traits/geoSearch.raml
+  productSearch: !include traits/productSearch.raml
 
 types: 
 
-  warehouseService: 
+  StoreInfo:
+    type: object
+    properties: 
+      storeId?: string
+      name: string
+      description?: string
+      notes?: string
+      openingHours:
+        type: string
+        example: "Mo,Tu,We,Th,Fr 08:00-18:00"
+      contact: ContactInfo
+      address: Address
+      geo: Geo
+      distance?: number
+      distanceUnit?: 
+        type: string
+        enum: [mi, km]
+  
+  ContactInfo:
+    type: object
+    description: | 
+      Contact information 
+    properties: 
+      email: string
+      phone: string
+      
+  Address:
+    type: object
+    properties: 
+      streetLine1: string
+      streetLine2: string
+      city: string
+      zipCode: string
+      state: string
+      country: string
+      
+  Geo:
+    type: object
+    properties: 
+      latitude: 
+        type: number
+        format: double
+      longitude:
+        type: number
+        format: double
+      
+  StoreAvailabilityData:
+    type: object
+    properties: 
+      storeInfo: StoreInfo
+      quantityInStock: integer
+      quantityReserved?: integer
+  
+  WarehouseInventory:
     type: object
     properties:
-      id: string 
-      availableAmount?:
+      warehouseId: string
+      name?: string  
+      availableCount?:
         type: number
         minimum: 0
-      reserveAmount?: 
+      reservedCount?: 
         type: number
         minimum: 0
-      status?: string
-       
-  variantAvailability:
+      lastUpdated?: datetime
+  
+  
+  PartnerInfo:
+    type: object
+    properties: 
+      partnerId?: string
+      name: string
+      description?: string
+      email: string
+      phone: string
+      url: string
+      shippingPrice: number
+  
+  PartnerAvailabilityData:
+    type: object
+    properties: 
+      partnerInfo: PartnerInfo
+      quantityInStock: integer
+      productPrice: number
+      tax: number
+      quantityReserved?: integer
+  
+  Availability:
     type: object
     properties:
+      productId: string
       variantId: string
-      totalAmount:
-        type: number
-        minimum: 0
-      status: string
-      date: date-only
-      warehousesAvailability: warehouseService[]
-      storesAvailability:  warehouseService[]
+      warehousesAvailability: WarehouseInventory[]
+      storesAvailability:  StoreAvailabilityData[]
+      partnersAvailability: PartnerAvailabilityData[] 
         
-        
-  variantReservation: 
-   type: object
-   properties: 
-    variantId: string
-    storeReservation: warehouseService
-    warehouseReservation: warehouseService
-    
+  Reservation: 
+    type: object
+    properties:
+      productId: string
+      variantId: string
+      customerId: string
+      quantity: integer
+      locationId: string
+      locationType: 
+        type: string
+        enum: [STORE, WAREHOUSE, PARTNER]
+      deliveryMethod: 
+        type: string
+        enum: [SHIPMENT, PICKUP]
   
 /availability:       
   get:
-    queryParameters: 
-      variantId:
-        type: string
+    is: [ geoSearch, productSearch ]
     responses:
       200: 
         body: 
-          application/json: 
-            example: | 
-              {
-                "variantId": "88668866-2c6d-4fa6-9e17-4b2c42e0f051",
-                "totalAmount": 8,
-                "status": "in stock",
-                "date": "2017-06-17",
-                "warehousesAvailability": [
-                  {
-                    "id": "1",
-                    "availableAmount": 2,
-                    "status": "available"
-                  },
-                  {
-                    "id": "3",
-                    "availableAmount": 3,
-                    "status": "available"
-                  }
-                ],
-                "storesAvailability": [
-                  {
-                    "id": "123",
-                    "availableAmount": 1,
-                    "status": "available"
-                  },
-                  {
-                    "id": "234",
-                    "availableAmount": 1,
-                    "status": "available"
-                  },
-                  {
-                    "id": "475",
-                    "amount": 1,
-                    "status": "available"
-                  },
-                  {
-                    "storeId": "324",
-                    "amount": 0,
-                    "status": "unavailable"
-                  }
-                ]
-              }
-            
+          application/json:
+            type: Availability
+            example: !include examples/get_availability_response.raml
+                    
+/locations:
+  /{locationId}: 
+    /availability:       
+        get:
+          is: [  geoSearch, productSearch ]
+          queryParameters: 
+              locationType:
+                required: true
+                type: string
+                enum: [STORE, WAREHOUSE, PARTNER]
+          responses:
+            200: 
+              body: 
+                application/json:
+                  example: |
+                         {
+                              "quantity" : 55
+                         }
+
+
 /reservation: 
   post:
     body:
-      application/json: 
-        example: {
-          "variantId": "88668866-2c6d-4fa6-9e17-4b2c42e0f051",
-          "storeReservation": {
-            id: "475",
-            reserveAmount: 1 
-          },
-          "warehouseReservation": {
-            id: "1",
-            reserveAmount: 1 
-          },
-          "date": 2017-06-27        
-        }
+      application/json:
+        type: Reservation 
+        example: !include examples/post_reservation_request.raml
     responses:
       201: 
         body:
           application/json:
-            example: {
-              "variantId": "88668866-2c6d-4fa6-9e17-4b2c42e0f051",
-              "storeReservation": {
-                  id: "475",
-                  reserveAmount: 1 
-               },
-               "warehouseReservation": {
-                  id: "1",
-                  reserveAmount: 1 
-               },
-               "date": 2017-06-27        
-            }
-              
-   
-
-
-        
-        
-
-   
-    
-   
-   
+            example: 
+              {
+              "message": "Product was reserved"   
+              }
