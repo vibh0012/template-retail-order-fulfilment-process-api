@@ -131,6 +131,8 @@ payload.quantity >= flowVars.currentItem.quantity
 %output application/json
 ---
 {
+	price: flowVars.inputOrder.price,
+	status: "Draft",
 	orderItems: {
 	  pickupItems : (flowVars.inputOrder.orderItems filter $.location.locationType == "STORE") 
 	  	map (orderItem) -> {
@@ -150,7 +152,7 @@ payload.quantity >= flowVars.currentItem.quantity
 			productName: orderItem.name,
 			quantity: orderItem.quantity
 	  },
-	  partnerItems : (flowVars.inputOrder.orderItems filter $.location.locationType == "PARTNER") 
+	  partnersItems : (flowVars.inputOrder.orderItems filter $.location.locationType == "PARTNER") 
 	  	map (orderItem) -> {
 			orderItemId: orderItem.itemId,
 			locationId: orderItem.location.locationId,
@@ -158,9 +160,7 @@ payload.quantity >= flowVars.currentItem.quantity
 			productId: orderItem.productId,
 			productName: orderItem.name,
 			quantity: orderItem.quantity
-	  },	  
-	price: flowVars.inputOrder.price,
-	status: "Draft"
+	  }
 	}
 }]]></dw:set-payload>
                 </dw:transform-message>
