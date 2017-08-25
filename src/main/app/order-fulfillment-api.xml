@@ -139,6 +139,7 @@ payload.quantity >= flowVars.currentItem.quantity
 			orderItemId: orderItem.itemId,
 			locationId: orderItem.location.locationId,
 			deliveryMethod: orderItem.location.deliveryMethod,
+			price: orderItem.price,
 			productId: orderItem.productId,
 			productName: orderItem.name,
 			quantity: orderItem.quantity
@@ -149,6 +150,7 @@ payload.quantity >= flowVars.currentItem.quantity
 			locationId: orderItem.location.locationId,
 			deliveryMethod: orderItem.location.deliveryMethod,
 			productId: orderItem.productId,
+			price: orderItem.price,
 			productName: orderItem.name,
 			quantity: orderItem.quantity
 	  },
@@ -158,6 +160,7 @@ payload.quantity >= flowVars.currentItem.quantity
 			locationId: orderItem.location.locationId,
 			deliveryMethod: orderItem.location.deliveryMethod,			
 			productId: orderItem.productId,
+			price: orderItem.price,
 			productName: orderItem.name,
 			quantity: orderItem.quantity
 	  }
