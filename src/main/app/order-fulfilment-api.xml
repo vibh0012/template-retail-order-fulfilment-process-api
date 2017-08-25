@@ -18,16 +18,16 @@ http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/m
 http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd">
     
     
-    <flow name="order-fulfillment-api-main">
-        <http:listener config-ref="order-fulfillment-api-httpListenerConfig" path="/api/*" doc:name="HTTP"/>
-        <apikit:router config-ref="order-fulfillment-api-config" doc:name="APIkit Router"/>
-        <exception-strategy ref="order-fulfillment-api-apiKitGlobalExceptionMapping" doc:name="Reference Exception Strategy"/>
+    <flow name="order-fulfilment-api-main">
+        <http:listener config-ref="order-fulfilment-api-httpListenerConfig" path="/api/*" doc:name="HTTP"/>
+        <apikit:router config-ref="order-fulfilment-api-config" doc:name="APIkit Router"/>
+        <exception-strategy ref="order-fulfilment-api-apiKitGlobalExceptionMapping" doc:name="Reference Exception Strategy"/>
     </flow>
-    <flow name="order-fulfillment-api-console">
-        <http:listener config-ref="order-fulfillment-api-httpListenerConfig" path="/console/*" doc:name="HTTP"/>
-        <apikit:console config-ref="order-fulfillment-api-config" doc:name="APIkit Console"/>
+    <flow name="order-fulfilment-api-console">
+        <http:listener config-ref="order-fulfilment-api-httpListenerConfig" path="/console/*" doc:name="HTTP"/>
+        <apikit:console config-ref="order-fulfilment-api-config" doc:name="APIkit Console"/>
     </flow>
-    <flow name="post:/orders:order-fulfillment-api-config">
+    <flow name="post:/orders:order-fulfilment-api-config">
         <dw:transform-message doc:name="save to var inputOrder">
             <dw:set-variable variableName="inputOrder"><![CDATA[%dw 1.0
 %output application/java
@@ -264,7 +264,7 @@ MuleSoft Team"
     
     
     
-    <apikit:mapping-exception-strategy name="order-fulfillment-api-apiKitGlobalExceptionMapping">
+    <apikit:mapping-exception-strategy name="order-fulfilment-api-apiKitGlobalExceptionMapping">
         <apikit:mapping statusCode="404">
             <apikit:exception value="org.mule.module.apikit.exception.NotFoundException" />
             <set-property propertyName="Content-Type" value="application/json" doc:name="Property"/>

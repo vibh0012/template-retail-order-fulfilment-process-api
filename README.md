@@ -1,4 +1,4 @@
-# Template Retail Order Fulfillment API
+# Template Retail Order Fulfilment API
 
 + [License Agreement](#licenseagreement)
 + [Use Case](#usecase)
@@ -18,10 +18,10 @@ Please review the terms of the license before downloading and using this templat
 
 # Use Case <a name="usecase"/>
 
-This API orchestrates the order fulfillment use case for Retail Catalyst. 
+This API orchestrates the order fulfilment use case for Retail Catalyst. 
 
 ### POST /orders
-This endpoint will trigger the order fulfillment process. The steps involved in the order fulfillment:
+This endpoint will trigger the order fulfilment process. The steps involved in the order fulfilment:
 
 1. Check availability of all order items by calling Product Availability API
 2. Reserve the items using the Product Availability API
@@ -30,7 +30,7 @@ This endpoint will trigger the order fulfillment process. The steps involved in 
 5. Update status of order by calling Order System API
 6. Send e-mail notification to the customer using Notifications System API
 
-You can look at the included RAML file to see the expected structure of the message to be sent to invoke the order fulfillment process. 
+You can look at the included RAML file to see the expected structure of the message to be sent to invoke the order fulfilment process. 
 
 # Considerations <a name="considerations"/>
 

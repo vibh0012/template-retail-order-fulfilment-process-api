@@ -12,9 +12,9 @@ http://www.springframework.org/schema/beans http://www.springframework.org/schem
 http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd">
 
-	<http:listener-config name="order-fulfillment-api-httpListenerConfig" host="0.0.0.0" port="${http.port}" doc:name="HTTP Listener Configuration"/>
+	<http:listener-config name="order-fulfilment-api-httpListenerConfig" host="0.0.0.0" port="${http.port}" doc:name="HTTP Listener Configuration"/>
     
-    <apikit:config name="order-fulfillment-api-config" raml="order-fulfillment-api.raml" consoleEnabled="false" doc:name="Router"/>
+    <apikit:config name="order-fulfilment-api-config" raml="order-fulfilment-api.raml" consoleEnabled="false" doc:name="Router"/>
     
     
     <http:request-config name="customers-api" protocol="HTTPS" doc:name="HTTP Request Configuration"
