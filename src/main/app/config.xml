@@ -39,6 +39,13 @@ http://www.springframework.org/schema/context http://www.springframework.org/sch
         <http:raml-api-configuration location="retail-orders-system-api/retail-orders-system-api.raml"/>
     </http:request-config>
     
+    <http:request-config name="partners-api" doc:name="HTTP Request Configuration"
+	    host="#[new URL('${partners-api.baseUri}').getHost()]" 
+	    port="#[new URL('${partners-api.baseUri}').getPort()]" 
+	    basePath="#[new URL('${partners-api.baseUri}').getPath()]">
+        <http:raml-api-configuration location="retail-partners-system-api/api.raml"/>
+    </http:request-config>
+    
     <http:request-config name="product-availability-api" doc:name="HTTP Request Configuration"
 	    host="#[new URL('${product-availability-api.baseUri}').getHost()]" 
 	    port="#[new URL('${product-availability-api.baseUri}').getPort()]" 

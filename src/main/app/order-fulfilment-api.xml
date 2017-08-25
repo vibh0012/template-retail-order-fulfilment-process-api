@@ -102,7 +102,7 @@ payload.quantity >= flowVars.currentItem.quantity
         <foreach collection="#[flowVars.inputOrder.orderItems]" doc:name="For Each Order Item">
             <dw:transform-message doc:name="reservation request">
                 <dw:set-payload><![CDATA[%dw 1.0
-%output application/json
+%output application/java
 ---
 {     
   "variantId": payload.itemId,
@@ -114,11 +114,42 @@ payload.quantity >= flowVars.currentItem.quantity
   "customerId": flowVars.inputOrder.customerId   
 }]]></dw:set-payload>
             </dw:transform-message>
-            <http:request config-ref="product-availability-api" path="/reservation" method="POST" doc:name="Reserve order item">
-                <http:request-builder>
-                    <http:header headerName="Content-Type" value="application/json"/>
-                </http:request-builder>
-            </http:request>
+            <choice doc:name="Is order placed from Partner?">
+                <when expression="#[payload.locationType == &quot;PARTNER&quot;]">
+                    <enricher source="#[payload]" target="#[flowVars.customerData]" doc:name="Set data about customer">
+                        <http:request config-ref="customers-api" path="/customers/{customerId}" method="GET" doc:name="Fetch customer data">
+                            <http:request-builder>
+                                <http:uri-param paramName="customerId" value="#[payload.customerId]"/>
+                            </http:request-builder>
+                        </http:request>
+                    </enricher>
+                    <dw:transform-message doc:name="Add customer's data to reservation request">
+                        <dw:set-payload><![CDATA[%dw 1.0
+%output application/json
+---
+payload ++ {
+	name: flowVars.customerData.firstName ++ " " ++ flowVars.customerData.lastName,
+	price: flowVars.inputOrder.price,
+	address: flowVars.customerData.postalAddress,
+	partnerId: payload.locationId
+}]]></dw:set-payload>
+                    </dw:transform-message>
+                    <http:request config-ref="partners-api" path="/reservation" method="POST" doc:name="Reserve order item via Partner">
+                        <http:request-builder>
+                            <http:header headerName="Content-type" value="application/json"/>
+                        </http:request-builder>
+                    </http:request>
+                </when>
+                <otherwise>
+                    <json:object-to-json-transformer doc:name="Object to JSON"/>
+                    <http:request config-ref="product-availability-api" path="/reservation" method="POST" doc:name="Reserve order item">
+                        <http:request-builder>
+                            <http:header headerName="Content-Type" value="application/json"/>
+                        </http:request-builder>
+                    </http:request>
+                </otherwise>
+            </choice>
+
         </foreach>
     </sub-flow>
     

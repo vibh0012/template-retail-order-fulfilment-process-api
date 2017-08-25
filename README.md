@@ -24,7 +24,7 @@ This API orchestrates the order fulfilment use case for Retail Catalyst.
 This endpoint will trigger the order fulfilment process. The steps involved in the order fulfilment:
 
 1. Check availability of all order items by calling Product Availability API
-2. Reserve the items using the Product Availability API
+2. Reserve the items using the Product Availability API. When some of the items are placed using Partner, the reservation is triggered via Partners System API
 3. Create order by calling Order System API
 4. Process payment by calling Payment Process API
 5. Update status of order by calling Order System API
@@ -91,4 +91,5 @@ Detailed list with examples:
 + orders-api.baseUri `http://orders.example.com:80/api`
 + product-availability-api.baseUri `http://product-availability.example.com:80/api`
 + payment-process-api.baseUri `http://payment.example.com:80/api`
++ partners-api.baseUri `http://partners.example.com:80/api`
 
