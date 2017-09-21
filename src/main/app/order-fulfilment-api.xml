@@ -162,38 +162,39 @@ payload ++ {
 %output application/json
 ---
 {
-	price: flowVars.inputOrder.price,
+	subtotal: flowVars.inputOrder.subtotal,
+	total: flowVars.inputOrder.total,
 	status: "Draft",
 	orderItems: {
 	  pickupItems : (flowVars.inputOrder.orderItems filter $.location.locationType == "STORE") 
 	  	map (orderItem) -> {
-			orderItemId: orderItem.itemId,
-			locationId: orderItem.location.locationId,
-			deliveryMethod: orderItem.location.deliveryMethod,
+	  		productName: orderItem.name,
 			price: orderItem.price,
+			quantity: orderItem.quantity,
+			deliveryMethod: orderItem.location.deliveryMethod,
 			productId: orderItem.productId,
-			productName: orderItem.name,
-			quantity: orderItem.quantity
+			orderItemId: orderItem.itemId,
+			locationId: orderItem.location.locationId
 	  },
 	  shipmentItems : (flowVars.inputOrder.orderItems filter $.location.locationType == "WAREHOUSE") 
 	  	map (orderItem) -> {
-			orderItemId: orderItem.itemId,
-			locationId: orderItem.location.locationId,
+			productName: orderItem.name,
+			price: orderItem.price,
+			quantity: orderItem.quantity,
 			deliveryMethod: orderItem.location.deliveryMethod,
 			productId: orderItem.productId,
-			price: orderItem.price,
-			productName: orderItem.name,
-			quantity: orderItem.quantity
+			orderItemId: orderItem.itemId,
+			locationId: orderItem.location.locationId
 	  },
 	  partnersItems : (flowVars.inputOrder.orderItems filter $.location.locationType == "PARTNER") 
 	  	map (orderItem) -> {
-			orderItemId: orderItem.itemId,
-			locationId: orderItem.location.locationId,
-			deliveryMethod: orderItem.location.deliveryMethod,			
-			productId: orderItem.productId,
-			price: orderItem.price,
 			productName: orderItem.name,
-			quantity: orderItem.quantity
+			price: orderItem.price,
+			quantity: orderItem.quantity,
+			deliveryMethod: orderItem.location.deliveryMethod,
+			productId: orderItem.productId,
+			orderItemId: orderItem.itemId,
+			locationId: orderItem.location.locationId
 	  }
 	}
 }]]></dw:set-payload>
@@ -250,7 +251,7 @@ payload ++ {
 	status: "Processing"
 }]]></dw:set-payload>
         </dw:transform-message>
-        <logger message="XXXXXXXXXXX #[message]" level="INFO" doc:name="Logger"/>
+
         <http:request config-ref="orders-api" path="/orders/{orderId}/status" method="PUT" doc:name="Update order status">
             <http:request-builder>
                 <http:uri-param paramName="orderId" value="#[flowVars.order.orderId]"/>
@@ -260,32 +261,68 @@ payload ++ {
     </sub-flow>
     
     <sub-flow name="sendNotificationEmail">
-        <logger level="INFO" doc:name="Send Notification to user (email)"/>
+        <logger level="INFO" doc:name="Send Notification to user (email)" message="Sending notification..."/>
         <http:request config-ref="customers-api" path="/customers/{customerId}" method="GET" doc:name="Get Customer info">
             <http:request-builder>
                 <http:uri-param paramName="customerId" value="#[flowVars.inputOrder.customerId]"/>
             </http:request-builder>
         </http:request>
         <dw:transform-message doc:name="build notification e-mail">
+            <dw:input-payload doc:sample="sample_data\map.dwl"/>
+            <dw:input-variable doc:sample="sample_data\json_1.json" variableName="inputOrder"/>
+            <dw:input-variable doc:sample="sample_data\json_2.json" variableName="order"/>
             <dw:input-variable mimeType="application/java" variableName="order]"/>
             <dw:set-payload><![CDATA[%dw 1.0
 %output application/json
+%var pickupItems = flowVars.inputOrder.orderItems filter $.location.locationType == "STORE"
+%var warehouseItems = flowVars.inputOrder.orderItems filter $.location.locationType == "WAREHOUSE"
+%var partnerItems = flowVars.inputOrder.orderItems filter $.location.locationType == "PARTNER"
 ---
 {
     type: "EMAIL",
     priority: "MINOR",
-    recipient: payload.emailAddress,
+    recipient: recipient: payload.emailAddress,
+    
     subject: "Order - $(flowVars.order.orderId) | Anypoint Store",
     message: "Hello,
 
-Your order [ $(flowVars.order.orderId) ] has been placed.
-We will inform you about future updates.
+Your order [ $(flowVars.order.orderId) ] has been placed.\n\n"
+++ 
+(("Items to be picked up in store: \n\n" ++
+(pickupItems map (
+  		"Product Name:" ++ $.name ++ "\n"
+  		++ "Quantity:" ++ $.quantity ++ "\n"
+		++ "Price:" ++ $.price ++ "\n"
+	) joinBy "\n")
+	++ "-----------------------------\n\n"
+) when not pickupItems is :empty otherwise '')
+++ 
+(("Items to be shipped: \n\n" ++
+(warehouseItems map ( 
+  		"Product Name:" ++ $.name ++ "\n"
+  		++ "Quantity:" ++ $.quantity ++ "\n"
+		++ "Price:" ++ $.price ++ " USD\n"
+	) joinBy "\n")
+	++ "-----------------------------\n\n"
+) when not warehouseItems is :empty otherwise '')
+++ 
+(("Items ordered from partners: \n\n" ++
+(partnerItems map ( 
+  		"Product Name:" ++ $.name ++ "\n"
+  		++ "Quantity:" ++ $.quantity ++ "\n"
+		++ "Price:" ++ $.price ++ " USD\n"
+	) joinBy "\n")
+	++ "-----------------------------\n"
+) when not partnerItems is :empty otherwise '')
+++
+"Total price: " ++ flowVars.inputOrder.total ++ " USD\n\n"
+++ "We will inform you about future updates.
 
 Thanks,
-MuleSoft Team"
-        
+MuleSoft Team"   
 }]]></dw:set-payload>
         </dw:transform-message>
+
         <http:request config-ref="notifications-api" path="/notifications" method="POST" doc:name="Send e-mail notification">
             <http:request-builder>
                 <http:header headerName="Content-Type" value="application/json"/>

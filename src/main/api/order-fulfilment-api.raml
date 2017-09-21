@@ -19,7 +19,8 @@ types:
     properties:
       customerId: string
       orderItems: OrderItem[]
-      price: string
+      subtotal: string
+      total: string
       
   Location: 
     type: object
@@ -47,6 +48,9 @@ types:
         example: |
           {
             "customerId" : "1",
+            "status": "draft",
+            "subtotal": "120.5", 
+            "total": "130.4",
             "orderItems": [
               {
                 "itemId": "1",
@@ -60,9 +64,7 @@ types:
                 "name": "Supersonic Electronic",
                 "quantity": 4
               }
-            ],
-            "status": "draft",
-            "price": "1304"
+            ]  
           }
     responses:
       201: 
