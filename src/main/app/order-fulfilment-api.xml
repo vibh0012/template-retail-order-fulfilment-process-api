@@ -28,11 +28,24 @@ http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mu
         <apikit:console config-ref="order-fulfilment-api-config" doc:name="APIkit Console"/>
     </flow>
     <flow name="post:/orders:order-fulfilment-api-config">
-        <dw:transform-message doc:name="save to var inputOrder">
+        <dw:transform-message doc:name="save to var inputOrder, set totaltax, subtotal, listLocations">
             <dw:set-variable variableName="inputOrder"><![CDATA[%dw 1.0
 %output application/java
 ---
 payload]]></dw:set-variable>
+            <dw:set-variable variableName="totalTax"><![CDATA[%dw 1.0
+%output application/java
+---
+0]]></dw:set-variable>
+            <dw:set-variable variableName="subtotal"><![CDATA[%dw 1.0
+%output application/java
+---
+0]]></dw:set-variable>
+            <dw:set-variable variableName="listLocations"><![CDATA[%dw 1.0
+%output application/java
+---
+[]]]></dw:set-variable>
+
         </dw:transform-message>
         <flow-ref name="checkAvailability" doc:name="checkAvailability"/>
         <flow-ref name="reserveOrderItems" doc:name="reserveOrderItems"/>
@@ -81,21 +94,45 @@ payload]]></dw:set-variable>
                     <http:query-param paramName="variantId" value="#[payload.itemId]"/>
                     <http:query-param paramName="productId" value="#[payload.productId]"/>
                     <http:query-param paramName="locationType" value="#[payload.location.locationType]"/>
+                    <http:query-param paramName="quantity" value="#[payload.quantity]"/>
+                    <http:query-param paramName="price" value="#[payload.price]"/>
                     <http:uri-param paramName="locationId" value="#[payload.location.locationId]"/>
+
 
 
                 </http:request-builder>
             </http:request>
-            <dw:transform-message doc:name="check availability">
+            <dw:transform-message doc:name="check availability, calculate subtotal, totalTax, set listLocations">
+            	<dw:input-payload mimeType="application/json"/>
                 <dw:set-payload><![CDATA[%dw 1.0
 %output application/java
 ---
-payload.quantity >= flowVars.currentItem.quantity
+payload.quantityInStock >= flowVars.currentItem.quantity
 
 ]]></dw:set-payload>
+                <dw:set-variable variableName="totalTax"><![CDATA[%dw 1.0
+%output application/java
+---
+flowVars.totalTax + payload.tax ]]></dw:set-variable>
+                <dw:set-variable variableName="subtotal"><![CDATA[%dw 1.0
+%output application/java
+---
+flowVars.subtotal + (flowVars.currentItem.price*flowVars.currentItem.quantity)]]></dw:set-variable>
+                <dw:set-variable variableName="listLocations"><![CDATA[%dw 1.0
+%output application/java
+---
+flowVars.listLocations + payload distinctBy $.locationId]]></dw:set-variable>
             </dw:transform-message>
+
             <validation:is-true expression="#[payload]" doc:name="All items must be available"/>
         </foreach>
+        <dw:transform-message doc:name="Calculation total shipping">
+            <dw:set-variable variableName="totalShipping"><![CDATA[%dw 1.0
+%output application/java
+---
+flowVars.listLocations reduce ((item, sum1 = 0) -> sum1 + (item.shipping))
+       ]]></dw:set-variable>
+        </dw:transform-message>
     </sub-flow>
     
     <sub-flow name="reserveOrderItems">
@@ -162,8 +199,10 @@ payload ++ {
 %output application/json
 ---
 {
-	subtotal: flowVars.inputOrder.subtotal,
-	total: flowVars.inputOrder.total,
+	subtotal: ((round (flowVars.subtotal)*100)/100) as :string,
+	totalTax: ((round (flowVars.totalTax)*100)/100) as :string,
+	shippingCost: ((round (flowVars.totalShipping)*100)/100) as :string,
+	total: ((round (flowVars.subtotal + flowVars.totalTax + flowVars.totalShipping)*100)/100) as :string,
 	status: "Draft",
 	orderItems: {
 	  pickupItems : (flowVars.inputOrder.orderItems filter $.location.locationType == "STORE") 
@@ -198,7 +237,9 @@ payload ++ {
 	  }
 	}
 }]]></dw:set-payload>
+
                 </dw:transform-message>
+
                 <http:request config-ref="orders-api" path="/orders/customer/{customerId}" method="POST" doc:name="Create Order">
                     <http:request-builder>
                         <http:uri-param paramName="customerId" value="#[ flowVars.inputOrder.customerId ]"/>
@@ -268,9 +309,6 @@ payload ++ {
             </http:request-builder>
         </http:request>
         <dw:transform-message doc:name="build notification e-mail">
-            <dw:input-payload doc:sample="sample_data\map.dwl"/>
-            <dw:input-variable doc:sample="sample_data\json_1.json" variableName="inputOrder"/>
-            <dw:input-variable doc:sample="sample_data\json_2.json" variableName="order"/>
             <dw:input-variable mimeType="application/java" variableName="order]"/>
             <dw:set-payload><![CDATA[%dw 1.0
 %output application/json
@@ -281,8 +319,7 @@ payload ++ {
 {
     type: "EMAIL",
     priority: "MINOR",
-    recipient: recipient: payload.emailAddress,
-    
+    recipient: payload.emailAddress,
     subject: "Order - $(flowVars.order.orderId) | Anypoint Store",
     message: "Hello,
 
@@ -315,7 +352,7 @@ Your order [ $(flowVars.order.orderId) ] has been placed.\n\n"
 	++ "-----------------------------\n"
 ) when not partnerItems is :empty otherwise '')
 ++
-"Total price: " ++ flowVars.inputOrder.total ++ " USD\n\n"
+"Total price: " ++ ((round (flowVars.subtotal + flowVars.totalTax + flowVars.totalShipping)*100)/100) as :string ++ " USD\n\n"
 ++ "We will inform you about future updates.
 
 Thanks,
