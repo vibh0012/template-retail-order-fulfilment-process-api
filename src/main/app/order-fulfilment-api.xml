@@ -28,7 +28,7 @@ http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mu
         <apikit:console config-ref="order-fulfilment-api-config" doc:name="APIkit Console"/>
     </flow>
     <flow name="post:/orders:order-fulfilment-api-config">
-        <dw:transform-message doc:name="save to var inputOrder, set totaltax, subtotal, listLocations">
+        <dw:transform-message doc:name="save to var inputOrder, set totaltax, subtotal, listPartners, warehouseShipping">
             <dw:set-variable variableName="inputOrder"><![CDATA[%dw 1.0
 %output application/java
 ---
@@ -41,7 +41,11 @@ payload]]></dw:set-variable>
 %output application/java
 ---
 0]]></dw:set-variable>
-            <dw:set-variable variableName="listLocations"><![CDATA[%dw 1.0
+            <dw:set-variable variableName="warehouseShipping"><![CDATA[%dw 1.0
+%output application/java
+---
+0]]></dw:set-variable>
+            <dw:set-variable variableName="listPartners"><![CDATA[%dw 1.0
 %output application/java
 ---
 []]]></dw:set-variable>
@@ -102,8 +106,7 @@ payload]]></dw:set-variable>
 
                 </http:request-builder>
             </http:request>
-            <dw:transform-message doc:name="check availability, calculate subtotal, totalTax, set listLocations">
-            	<dw:input-payload mimeType="application/json"/>
+            <dw:transform-message doc:name="check availability, calculate subtotal, totalTax, set listPartners, warehouseShipping">
                 <dw:set-payload><![CDATA[%dw 1.0
 %output application/java
 ---
@@ -118,21 +121,41 @@ flowVars.totalTax + payload.tax ]]></dw:set-variable>
 %output application/java
 ---
 flowVars.subtotal + (flowVars.currentItem.price*flowVars.currentItem.quantity)]]></dw:set-variable>
-                <dw:set-variable variableName="listLocations"><![CDATA[%dw 1.0
+                <dw:set-variable variableName="warehouseShipping"><![CDATA[%dw 1.0
 %output application/java
 ---
-flowVars.listLocations + payload distinctBy $.locationId]]></dw:set-variable>
+payload.shipping when ((payload.locationType == "WAREHOUSE") and (payload.shipping > flowVars.warehouseShipping))
+	otherwise flowVars.warehouseShipping]]></dw:set-variable>
+                <dw:set-variable variableName="listPartners"><![CDATA[%dw 1.0
+%output application/java
+---
+(flowVars.listPartners + payload) distinctBy $.locationId when (payload.locationType == "PARTNER")
+	otherwise flowVars.listPartners ]]></dw:set-variable>
             </dw:transform-message>
+
 
             <validation:is-true expression="#[payload]" doc:name="All items must be available"/>
         </foreach>
-        <dw:transform-message doc:name="Calculation total shipping">
-            <dw:set-variable variableName="totalShipping"><![CDATA[%dw 1.0
+        <choice doc:name="Is partnersList empty?">
+            <when expression="#[flowVars.listPartners != []]">
+                <dw:transform-message doc:name="Calculation total shipping">
+                    <dw:set-variable variableName="totalShipping"><![CDATA[%dw 1.0
 %output application/java
 ---
-flowVars.listLocations reduce ((item, sum1 = 0) -> sum1 + (item.shipping))
+flowVars.warehouseShipping + (flowVars.listPartners reduce ((item, sum1 = 0) -> sum1 + (item.shipping)))
        ]]></dw:set-variable>
-        </dw:transform-message>
+                </dw:transform-message>
+            </when>
+            <otherwise>
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:set-variable variableName="totalShipping"><![CDATA[%dw 1.0
+%output application/java
+---
+flowVars.warehouseShipping]]></dw:set-variable>
+                </dw:transform-message>
+            </otherwise>
+        </choice>
+
     </sub-flow>
     
     <sub-flow name="reserveOrderItems">
